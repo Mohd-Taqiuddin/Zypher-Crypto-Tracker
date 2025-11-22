@@ -41,10 +41,6 @@ const zypherDir = `${cwd}/.zypher`;
 const workspaceDataDir = `${zypherDir}/workspace`;
 const fileAttachmentCacheDir = `${zypherDir}/cache/files`;
 
-// make sure folders exist
-await Deno.mkdir(workspaceDataDir, { recursive: true });
-await Deno.mkdir(fileAttachmentCacheDir, { recursive: true });
-
 const context: ZypherContext = {
   workingDirectory: cwd,
   zypherDir,
