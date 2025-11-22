@@ -20,7 +20,7 @@ function getRequiredEnv(name: string): string {
   return value;
 }
 
-// instructions we want the agent to follow
+// instructions we want the agent to follow 
 const baseInstructions = `
 You are a crypto analysis agent. The frontend will send you a token symbol
 like BTC, ETH, or AVAX.
