@@ -5,17 +5,22 @@ import { serve } from "https://deno.land/std@0.224.0/http/server.ts";
 import {
   AnthropicModelProvider,
   ZypherAgent,
+  type ZypherContext,
+  type TaskEvent,
 } from "@corespeed/zypher";
-import Anthropic from "npm:@anthropic-ai/sdk";
+import { eachValueFrom } from "npm:rxjs-for-await";
 
-// env helper
+// ---------- helpers ----------
+
 function getRequiredEnv(name: string): string {
   const value = Deno.env.get(name);
-  if (!value) throw new Error(`Environment variable ${name} is not set`);
+  if (!value) {
+    throw new Error(`Environment variable ${name} is not set`);
+  }
   return value;
 }
 
-// System instructions for the agent / model
+// instructions we want the agent to follow
 const baseInstructions = `
 You are a crypto analysis agent. The frontend will send you a token symbol
 like BTC, ETH, or AVAX.
@@ -29,67 +34,80 @@ Your job:
 Keep every answer under 220 words.
 Do not invent prices or fake numbers.
 `;
+// ---------- Zypher context and directories ----------
 
-// --- Start a Zypher agent (for the assignment) ---
-const zypher = new ZypherAgent(
-  new AnthropicModelProvider({
-    apiKey: getRequiredEnv("ANTHROPIC_API_KEY"),
-  }),
-  {
-    customInstructions: baseInstructions,
-  },
-);
+const cwd = Deno.cwd();
+const zypherDir = `${cwd}/.zypher`;
+const workspaceDataDir = `${zypherDir}/workspace`;
+const fileAttachmentCacheDir = `${zypherDir}/cache/files`;
 
-// --- Anthropic client (used for actual responses) ---
-const anthropic = new Anthropic({
+// make sure folders exist
+await Deno.mkdir(workspaceDataDir, { recursive: true });
+await Deno.mkdir(fileAttachmentCacheDir, { recursive: true });
+
+const context: ZypherContext = {
+  workingDirectory: cwd,
+  zypherDir,
+  workspaceDataDir,
+  fileAttachmentCacheDir,
+  userId: "local-user",
+};
+
+// ---------- Zypher agent ----------
+
+const provider = new AnthropicModelProvider({
   apiKey: getRequiredEnv("ANTHROPIC_API_KEY"),
 });
 
-// CORS
+const agent = new ZypherAgent(context, provider, {
+  config: {
+    maxIterations: 8,
+    maxTokens: 800,
+    taskTimeoutMs: 60_000,
+  },
+});
+
+// ---------- CORS ----------
+
 const cors = {
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Headers": "Content-Type",
   "Access-Control-Allow-Methods": "POST, OPTIONS",
 };
 
-// Use Anthropic directly to generate the crypto analysis
-async function runCryptoTask(symbol: string): Promise<string> {
-  const cleaned = symbol.trim().toUpperCase() || "BTC";
+// ---------- run task through Zypher ----------
 
-  const userPrompt = `
+async function runCryptoTask(symbolRaw: string): Promise<string> {
+  const symbol = (symbolRaw || "").trim().toUpperCase() || "BTC";
+
+  const taskDescription = `
 ${baseInstructions}
 
 User request:
-Give me a concise analysis for the token with symbol "${cleaned}".
+Give me a concise analysis for the token with symbol "${symbol}".
 Focus on the narrative and what a short term trader should pay attention to.
-`;
+  `.trim();
 
-  const resp = await anthropic.messages.create({
-  model: "claude-sonnet-4-20250514",
-  max_tokens: 512,
-  messages: [
-    {
-      role: "user",
-      content: userPrompt,
-    },
-  ],
-});
+  const events$ = agent.runTask(
+    taskDescription,
+    "claude-sonnet-4-20250514",
+  );
 
-
-  // Anthropic SDK returns an array of content blocks; join any text segments
   let text = "";
 
-  for (const block of resp.content) {
-    // text block
-    if (block.type === "text") {
-      text += block.text;
+  for await (const event of eachValueFrom<TaskEvent>(events$)) {
+    if (event.type === "text") {
+      text += event.content;
     }
   }
 
-  return text.trim() || "Model did not return any text.";
+  await agent.wait().catch(() => {});
+
+  return text.trim() || "Agent finished without returning a response.";
 }
 
-// HTTP server
+// ---------- HTTP server ----------
+
 serve(async req => {
   if (req.method === "OPTIONS") {
     return new Response(null, { status: 204, headers: cors });
@@ -134,3 +152,5 @@ serve(async req => {
 
   return new Response("Not found", { status: 404, headers: cors });
 });
+
+console.log("🚀 Zypher backend running at http://localhost:8000/");
