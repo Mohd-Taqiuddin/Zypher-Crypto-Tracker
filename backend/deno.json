@@ -1,0 +1,6 @@
+{
+  "imports": {
+    "@corespeed/zypher": "jsr:@corespeed/zypher@0.5.1",
+    "@std/dotenv": "jsr:@std/dotenv@^0.225.5"
+  }
+}
