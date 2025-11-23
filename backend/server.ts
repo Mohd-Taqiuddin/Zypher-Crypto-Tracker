@@ -23,17 +23,20 @@ function getRequiredEnv(name: string): string {
 // instructions we want the agent to follow 
 const baseInstructions = `
 You are a crypto analysis agent. The frontend will send you a token symbol
-like BTC, ETH, or AVAX.
+like BTC, ETH, AVAX or any other crypto token.
 
 Your job:
 1. Briefly describe the asset's typical narrative or use case.
 2. Give three very short bullet points about what a short term trader should
    watch (volatility, liquidity, news sensitivity, etc.).
-3. End with one clear line that says this is not financial advice.
+3.  Give a concise summary of recent market sentiment ...
+   ... and also give a short term slacking trade 
+4. End with one clear line that says this is not financial advice.
+Include prices when relevant, but do not make up numbers.
 
-Keep every answer under 220 words.
-Do not invent prices or fake numbers.
+Keep every answer under 300 words.
 `;
+
 // ---------- Zypher context and directories ----------
 
 const cwd = Deno.cwd();
